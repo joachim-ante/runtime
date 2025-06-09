@@ -623,7 +623,8 @@ namespace ILCompiler
             string exportsFile = Get(_command.ExportsFile);
             if (exportsFile != null)
             {
-                ExportsFileWriter defFileWriter = new ExportsFileWriter(typeSystemContext, exportsFile, Get(_command.ExportDynamicSymbols));
+                ExportsFileWriter defFileWriter = new ExportsFileWriter(typeSystemContext, exportsFile,
+                    ((Compilation)compilation).NodeFactory.GetExportSymbols(Get(_command.ExportDynamicSymbols), typeSystemContext.Target));
 
                 if (Get(_command.ExportUnmanagedEntryPoints))
                 {

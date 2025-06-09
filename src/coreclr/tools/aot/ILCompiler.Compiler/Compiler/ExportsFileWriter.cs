@@ -43,10 +43,19 @@ namespace ILCompiler
                 }
                 else if (_context.Target.IsApplePlatform)
                 {
+                    //@TODO: Check if these string.IsNullOrEmpty changes are really required
                     foreach (string symbol in _exportSymbols)
-                        streamWriter.WriteLine($"_{symbol}");
+                    {
+                        if (!string.IsNullOrEmpty(symbol))
+                            streamWriter.WriteLine($"_{symbol}");
+                    }
+
                     foreach (var method in _methods)
-                        streamWriter.WriteLine($"_{method.GetUnmanagedCallersOnlyExportName()}");
+                    {
+                        var symbol = method.GetUnmanagedCallersOnlyExportName();
+                        if (!string.IsNullOrEmpty(symbol))
+                            streamWriter.WriteLine($"_{symbol}");
+                    }
                 }
                 else
                 {

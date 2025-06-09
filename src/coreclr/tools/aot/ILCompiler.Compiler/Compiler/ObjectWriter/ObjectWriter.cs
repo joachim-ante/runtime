@@ -16,6 +16,7 @@ using static ILCompiler.DependencyAnalysis.RelocType;
 
 namespace ILCompiler.ObjectWriter
 {
+
     public abstract class ObjectWriter
     {
         private protected sealed record SymbolDefinition(int SectionIndex, long Value, int Size = 0, bool Global = false);
@@ -244,6 +245,7 @@ namespace ILCompiler.ObjectWriter
                 new SymbolDefinition(sectionIndex, offset, size, global));
         }
 
+
         /// <summary>
         /// Emit symbolic definitions into object file symbols.
         /// </summary>
@@ -409,18 +411,21 @@ namespace ILCompiler.ObjectWriter
                 long thumbBit = _nodeFactory.Target.Architecture == TargetArchitecture.ARM && isMethod ? 1 : 0;
                 foreach (ISymbolDefinitionNode n in nodeContents.DefinedSymbols)
                 {
+                    string mangledName = n == node ? currentSymbolName : GetMangledName(n);
+                    bool global = _nodeFactory.ShouldBeGlobalAndTrack(n, mangledName);
                     sectionWriter.EmitSymbolDefinition(
-                        n == node ? currentSymbolName : GetMangledName(n),
+                        mangledName,
                         n.Offset + thumbBit,
-                        n.Offset == 0 && isMethod ? nodeContents.Data.Length : 0);
+                        n.Offset == 0 && isMethod ? nodeContents.Data.Length : 0, global);
                     if (_nodeFactory.GetSymbolAlternateName(n, out bool isHidden) is string alternateName)
                     {
                         string alternateCName = ExternCName(alternateName);
+                        bool alternateGlobal = _nodeFactory.ShouldBeGlobalAndTrack(n, alternateCName, isHidden);
                         sectionWriter.EmitSymbolDefinition(
                             alternateCName,
                             n.Offset + thumbBit,
                             n.Offset == 0 && isMethod ? nodeContents.Data.Length : 0,
-                            global: !isHidden);
+                            global: alternateGlobal);
 
                         if (n is IMethodNode)
                         {
