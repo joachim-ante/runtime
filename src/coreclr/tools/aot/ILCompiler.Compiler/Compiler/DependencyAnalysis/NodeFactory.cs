@@ -180,8 +180,15 @@ namespace ILCompiler.DependencyAnalysis
                     return false;
                 }
             }
+            // Non-GC statics are just static fields that someone might refer to, and we want them accessible.
+            if (symbolNode is NonGCStaticsNode)
+                return true;
 
-            // For non-method symbols, default to not exported for now
+            // Always export vfts; type-metadata needs to be accessible.
+            if (symbolNode is EETypeNode)
+                return true;
+
+            // For all other symbols, default to not exported for now
             return false;
         }
 
