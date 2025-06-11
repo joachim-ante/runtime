@@ -165,21 +165,10 @@ namespace ILCompiler.DependencyAnalysis
         /// <returns>True if the symbol should be global/exported</returns>
         public bool ShouldBeGlobal(ISymbolDefinitionNode symbolNode, string mangledName)
         {
-            // Check if this is a method node
+            // Any methods are accessible since generics can call both public and private methods
             if (symbolNode is IMethodNode methodNode)
-            {
-                try
-                {
-                    // Check if the method is public
-                    MethodDesc method = methodNode.Method;
-                    return method.IsPublic;
-                }
-                catch
-                {
-                    // If we can't determine visibility, default to not exported
-                    return false;
-                }
-            }
+                return true;
+
             // Non-GC statics are just static fields that someone might refer to, and we want them accessible.
             if (symbolNode is NonGCStaticsNode)
                 return true;
@@ -364,7 +353,7 @@ namespace ILCompiler.DependencyAnalysis
             });
             _externIndirectSymbols = new NodeCache<string, ExternSymbolNode>((string name) =>
             {
-                return new ExternSymbolNode(name, isIndirection: true);
+                return new ExternSymbolNode(name);
             });
 
             _pInvokeModuleFixups = new NodeCache<PInvokeModuleData, PInvokeModuleFixupNode>((PInvokeModuleData moduleData) =>

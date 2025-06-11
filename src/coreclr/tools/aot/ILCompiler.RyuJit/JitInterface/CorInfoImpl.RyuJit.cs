@@ -2181,22 +2181,52 @@ namespace Internal.JitInterface
                     }
                     else if (!_compilation.HasLazyStaticConstructor(field.OwningType))
                     {
-                        fieldAccessor = CORINFO_FIELD_ACCESSOR.CORINFO_FIELD_STATIC_RELOCATABLE;
                         ISymbolNode baseAddr;
                         if (field.HasGCStaticBase)
                         {
-                            pResult->fieldLookup.accessType = InfoAccessType.IAT_PVALUE;
                             baseAddr = _compilation.NodeFactory.TypeGCStaticsSymbol((MetadataType)field.OwningType);
                         }
                         else
                         {
-                            pResult->fieldLookup.accessType = InfoAccessType.IAT_VALUE;
                             baseAddr = _compilation.NodeFactory.TypeNonGCStaticsSymbol((MetadataType)field.OwningType);
                         }
-                        pResult->fieldLookup.addr = (void*)ObjectToHandle(baseAddr);
+
+                        // Check if we need to use a helper for cross-module access
+                        if (baseAddr.RepresentsIndirectionCell)
+                        {
+                            // Force helper usage for external static fields to ensure GOT indirection
+                            fieldAccessor = CORINFO_FIELD_ACCESSOR.CORINFO_FIELD_STATIC_SHARED_STATIC_HELPER;
+                            if (field.HasGCStaticBase)
+                            {
+                                pResult->helper = CorInfoHelpFunc.CORINFO_HELP_READYTORUN_GCSTATIC_BASE;
+                                helperId = ReadyToRunHelperId.GetGCStaticBase;
+                            }
+                            else
+                            {
+                                pResult->helper = CorInfoHelpFunc.CORINFO_HELP_READYTORUN_NONGCSTATIC_BASE;
+                                helperId = ReadyToRunHelperId.GetNonGCStaticBase;
+                            }
+                            // Don't set fieldLookup.addr for external fields - must go through helper
+                        }
+                        else
+                        {
+                            // Local static fields can use direct access
+                            fieldAccessor = CORINFO_FIELD_ACCESSOR.CORINFO_FIELD_STATIC_RELOCATABLE;
+                            if (field.HasGCStaticBase)
+                            {
+                                pResult->fieldLookup.accessType = InfoAccessType.IAT_PVALUE;
+                            }
+                            else
+                            {
+                                pResult->fieldLookup.accessType = InfoAccessType.IAT_VALUE;
+                            }
+                            pResult->fieldLookup.addr = (void*)ObjectToHandle(baseAddr);
+                        }
                     }
                     else
                     {
+                        // Type has lazy static constructor
+                        fieldAccessor = CORINFO_FIELD_ACCESSOR.CORINFO_FIELD_STATIC_SHARED_STATIC_HELPER;
                         if (field.HasGCStaticBase)
                         {
                             pResult->helper = CorInfoHelpFunc.CORINFO_HELP_READYTORUN_GCSTATIC_BASE;
@@ -2436,7 +2466,17 @@ namespace Internal.JitInterface
         private bool getIsClassInitedFlagAddress(CORINFO_CLASS_STRUCT_* cls, ref CORINFO_CONST_LOOKUP addr, ref int offset)
         {
             MetadataType type = (MetadataType)HandleToObject(cls);
-            addr.addr = (void*)ObjectToHandle(_compilation.NodeFactory.TypeNonGCStaticsSymbol(type));
+            ISymbolNode staticSymbol = _compilation.NodeFactory.TypeNonGCStaticsSymbol(type);
+
+            // Check if this is an external symbol that needs indirection
+            if (staticSymbol.RepresentsIndirectionCell)
+            {
+                // For external static symbols, we cannot return a direct address
+                // The JIT needs to use a different approach for external types
+                return false;
+            }
+
+            addr.addr = (void*)ObjectToHandle(staticSymbol);
             addr.accessType = InfoAccessType.IAT_VALUE;
             offset = -NonGCStaticsNode.GetClassConstructorContextSize(_compilation.NodeFactory.Target);
             return true;
@@ -2445,16 +2485,27 @@ namespace Internal.JitInterface
         private bool getStaticBaseAddress(CORINFO_CLASS_STRUCT_* cls, bool isGc, ref CORINFO_CONST_LOOKUP addr)
         {
             MetadataType type = (MetadataType)HandleToObject(cls);
+
+            ISymbolNode staticSymbol;
             if (isGc)
             {
+                staticSymbol = _compilation.NodeFactory.TypeGCStaticsSymbol(type);
                 addr.accessType = InfoAccessType.IAT_PVALUE;
-                addr.addr = (void*)ObjectToHandle(_compilation.NodeFactory.TypeGCStaticsSymbol(type));
             }
             else
             {
+                staticSymbol = _compilation.NodeFactory.TypeNonGCStaticsSymbol(type);
                 addr.accessType = InfoAccessType.IAT_VALUE;
-                addr.addr = (void*)ObjectToHandle(_compilation.NodeFactory.TypeNonGCStaticsSymbol(type));
             }
+
+            // Check if this is an external symbol
+            // For external symbols, return false to force helper usage
+            if (staticSymbol.RepresentsIndirectionCell)
+            {
+                return false;
+            }
+
+            addr.addr = (void*)ObjectToHandle(staticSymbol);
             return true;
         }
 

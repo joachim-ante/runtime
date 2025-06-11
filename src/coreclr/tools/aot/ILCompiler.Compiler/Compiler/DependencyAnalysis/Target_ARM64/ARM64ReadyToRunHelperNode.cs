@@ -23,16 +23,17 @@ namespace ILCompiler.DependencyAnalysis
                         MetadataType target = (MetadataType)Target;
 
                         bool hasLazyStaticConstructor = factory.PreinitializationManager.HasLazyStaticConstructor(target);
+                        ISortableSymbolNode nonGCStaticsSymbol = factory.TypeNonGCStaticsSymbol(target);
 
                         if (!hasLazyStaticConstructor)
                         {
-                            encoder.EmitMOV(encoder.TargetRegister.Result, factory.TypeNonGCStaticsSymbol(target));
+                            encoder.EmitMOV(encoder.TargetRegister.Result, nonGCStaticsSymbol);
                             encoder.EmitRET();
                         }
                         else
                         {
                             // The fast path check is not necessary. It is always expanded by RyuJIT.
-                            encoder.EmitMOV(encoder.TargetRegister.Arg1, factory.TypeNonGCStaticsSymbol(target));
+                            encoder.EmitMOV(encoder.TargetRegister.Arg1, nonGCStaticsSymbol);
                             encoder.EmitSUB(encoder.TargetRegister.Arg0, encoder.TargetRegister.Arg1, NonGCStaticsNode.GetClassConstructorContextSize(factory.Target));
                             encoder.EmitJMP(factory.HelperEntrypoint(HelperEntrypoint.EnsureClassConstructorRunAndReturnNonGCStaticBase));
                         }
@@ -82,8 +83,9 @@ namespace ILCompiler.DependencyAnalysis
                 case ReadyToRunHelperId.GetGCStaticBase:
                     {
                         MetadataType target = (MetadataType)Target;
+                        ISortableSymbolNode gcStaticsSymbol = factory.TypeGCStaticsSymbol(target);
 
-                        encoder.EmitMOV(encoder.TargetRegister.Result, factory.TypeGCStaticsSymbol(target));
+                        encoder.EmitMOV(encoder.TargetRegister.Result, gcStaticsSymbol);
 
                         if (!factory.PreinitializationManager.HasLazyStaticConstructor(target))
                         {
@@ -94,7 +96,18 @@ namespace ILCompiler.DependencyAnalysis
                         {
                             // The fast path check is not necessary. It is always expanded by RyuJIT.
                             encoder.EmitLDR(encoder.TargetRegister.Arg1, encoder.TargetRegister.Result);
-                            encoder.EmitMOV(encoder.TargetRegister.Arg0, factory.TypeNonGCStaticsSymbol(target));
+
+                            ISortableSymbolNode nonGCStaticsSymbol = factory.TypeNonGCStaticsSymbol(target);
+                            if (nonGCStaticsSymbol.RepresentsIndirectionCell)
+                            {
+                                // Load from indirection cell for external symbols
+                                encoder.EmitMOV(encoder.TargetRegister.Arg0, nonGCStaticsSymbol);
+                                encoder.EmitLDR(encoder.TargetRegister.Arg0, encoder.TargetRegister.Arg0);
+                            }
+                            else
+                            {
+                                encoder.EmitMOV(encoder.TargetRegister.Arg0, nonGCStaticsSymbol);
+                            }
                             encoder.EmitSUB(encoder.TargetRegister.Arg0, NonGCStaticsNode.GetClassConstructorContextSize(factory.Target));
                             encoder.EmitJMP(factory.HelperEntrypoint(HelperEntrypoint.EnsureClassConstructorRunAndReturnGCStaticBase));
                         }

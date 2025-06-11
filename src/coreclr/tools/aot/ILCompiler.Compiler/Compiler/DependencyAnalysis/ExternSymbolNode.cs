@@ -15,22 +15,20 @@ namespace ILCompiler.DependencyAnalysis
     public class ExternSymbolNode : SortableDependencyNode, ISortableSymbolNode
     {
         private readonly Utf8String _name;
-        private readonly bool _isIndirection;
 
-        public ExternSymbolNode(Utf8String name, bool isIndirection = false)
+        public ExternSymbolNode(Utf8String name)
         {
             _name = name;
-            _isIndirection = isIndirection;
         }
 
-        protected override string GetName(NodeFactory factory) => $"ExternSymbol {_name}{(_isIndirection ? " (indirected)" : "")}";
+        protected override string GetName(NodeFactory factory) => $"ExternSymbol {_name}";
 
         public void AppendMangledName(NameMangler nameMangler, Utf8StringBuilder sb)
         {
             sb.Append(_name);
         }
         public int Offset => 0;
-        public virtual bool RepresentsIndirectionCell => _isIndirection;
+        public virtual bool RepresentsIndirectionCell => false;
 
         public override bool InterestingForDynamicDependencyAnalysis => false;
         public override bool HasDynamicDependencies => false;
@@ -62,5 +60,18 @@ namespace ILCompiler.DependencyAnalysis
             : base(name) { }
 
         public override int ClassCode => -45645737;
+    }
+
+    /// <summary>
+    /// Represents an external static field symbol that requires GOT indirection
+    /// </summary>
+    public class ExternStaticSymbolNode : ExternSymbolNode
+    {
+        public ExternStaticSymbolNode(Utf8String name)
+            : base(name) { }
+
+        public override bool RepresentsIndirectionCell => true;
+
+        public override int ClassCode => -45645738;
     }
 }
