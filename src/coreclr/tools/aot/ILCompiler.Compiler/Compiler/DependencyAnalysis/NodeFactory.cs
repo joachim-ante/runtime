@@ -166,7 +166,7 @@ namespace ILCompiler.DependencyAnalysis
         public bool ShouldBeGlobal(ISymbolDefinitionNode symbolNode, string mangledName)
         {
             // Any methods are accessible since generics can call both public and private methods
-            if (symbolNode is IMethodNode methodNode)
+            if (symbolNode is IMethodNode)
                 return true;
 
             // Non-GC statics are just static fields that someone might refer to, and we want them accessible.
