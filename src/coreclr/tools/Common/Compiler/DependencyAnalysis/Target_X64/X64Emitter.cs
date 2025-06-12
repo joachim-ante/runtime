@@ -107,7 +107,17 @@ namespace ILCompiler.DependencyAnalysis.X64
         {
             if (symbol.RepresentsIndirectionCell)
             {
-                throw new NotImplementedException();
+                // For indirection cells, we need to conditionally jump to the address
+                // stored in the indirection cell
+
+                // jne skip (skip the indirect jump if condition is not met)
+                Builder.EmitByte(0x75);
+                Builder.EmitByte(0x06); // Skip next 6 bytes (FF 25 + 4-byte offset)
+
+                // jmp [rip+symbol] - indirect jump through the indirection cell
+                Builder.EmitByte(0xFF);
+                Builder.EmitByte(0x25);
+                Builder.EmitReloc(symbol, RelocType.IMAGE_REL_BASED_REL32);
             }
             else
             {
@@ -121,7 +131,17 @@ namespace ILCompiler.DependencyAnalysis.X64
         {
             if (symbol.RepresentsIndirectionCell)
             {
-                throw new NotImplementedException();
+                // For indirection cells, we need to conditionally jump to the address
+                // stored in the indirection cell
+
+                // je skip (skip the indirect jump if condition is not met)
+                Builder.EmitByte(0x74);
+                Builder.EmitByte(0x06); // Skip next 6 bytes (FF 25 + 4-byte offset)
+
+                // jmp [rip+symbol] - indirect jump through the indirection cell
+                Builder.EmitByte(0xFF);
+                Builder.EmitByte(0x25);
+                Builder.EmitReloc(symbol, RelocType.IMAGE_REL_BASED_REL32);
             }
             else
             {

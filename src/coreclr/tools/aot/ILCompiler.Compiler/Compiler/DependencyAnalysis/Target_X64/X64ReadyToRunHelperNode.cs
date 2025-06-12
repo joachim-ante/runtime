@@ -22,16 +22,31 @@ namespace ILCompiler.DependencyAnalysis
                     {
                         MetadataType target = (MetadataType)Target;
                         bool hasLazyStaticConstructor = factory.PreinitializationManager.HasLazyStaticConstructor(target);
+                        ISortableSymbolNode nonGCStaticsSymbol = factory.TypeNonGCStaticsSymbol(target);
 
                         if (!hasLazyStaticConstructor)
                         {
-                            encoder.EmitLEAQ(encoder.TargetRegister.Result, factory.TypeNonGCStaticsSymbol(target));
+                            if (nonGCStaticsSymbol.RepresentsIndirectionCell)
+                            {
+                                encoder.EmitMOV(encoder.TargetRegister.Result, nonGCStaticsSymbol);
+                            }
+                            else
+                            {
+                                encoder.EmitLEAQ(encoder.TargetRegister.Result, nonGCStaticsSymbol);
+                            }
                             encoder.EmitRET();
                         }
                         else
                         {
                             // The fast path check is not necessary. It is always expanded by RyuJIT.
-                            encoder.EmitLEAQ(encoder.TargetRegister.Arg1, factory.TypeNonGCStaticsSymbol(target));
+                            if (nonGCStaticsSymbol.RepresentsIndirectionCell)
+                            {
+                                encoder.EmitMOV(encoder.TargetRegister.Arg1, nonGCStaticsSymbol);
+                            }
+                            else
+                            {
+                                encoder.EmitLEAQ(encoder.TargetRegister.Arg1, nonGCStaticsSymbol);
+                            }
 
                             AddrMode loadCctor = new AddrMode(encoder.TargetRegister.Arg1, null, -NonGCStaticsNode.GetClassConstructorContextSize(factory.Target), 0, AddrModeSize.Int64);
                             encoder.EmitLEA(encoder.TargetRegister.Arg0, ref loadCctor);
@@ -85,8 +100,16 @@ namespace ILCompiler.DependencyAnalysis
                 case ReadyToRunHelperId.GetGCStaticBase:
                     {
                         MetadataType target = (MetadataType)Target;
+                        ISortableSymbolNode gcStaticsSymbol = factory.TypeGCStaticsSymbol(target);
 
-                        encoder.EmitLEAQ(encoder.TargetRegister.Result, factory.TypeGCStaticsSymbol(target));
+                        if (gcStaticsSymbol.RepresentsIndirectionCell)
+                        {
+                            encoder.EmitMOV(encoder.TargetRegister.Result, gcStaticsSymbol);
+                        }
+                        else
+                        {
+                            encoder.EmitLEAQ(encoder.TargetRegister.Result, gcStaticsSymbol);
+                        }
 
                         if (!factory.PreinitializationManager.HasLazyStaticConstructor(target))
                         {
@@ -99,7 +122,17 @@ namespace ILCompiler.DependencyAnalysis
                             // The fast path check is not necessary. It is always expanded by RyuJIT.
                             AddrMode loadFromRax = new AddrMode(encoder.TargetRegister.Result, null, 0, 0, AddrModeSize.Int64);
                             encoder.EmitMOV(encoder.TargetRegister.Arg1, ref loadFromRax);
-                            encoder.EmitLEAQ(encoder.TargetRegister.Arg0, factory.TypeNonGCStaticsSymbol(target), -NonGCStaticsNode.GetClassConstructorContextSize(factory.Target));
+                            ISortableSymbolNode nonGCStaticsSymbol = factory.TypeNonGCStaticsSymbol(target);
+                            if (nonGCStaticsSymbol.RepresentsIndirectionCell)
+                            {
+                                encoder.EmitMOV(encoder.TargetRegister.Arg0, nonGCStaticsSymbol);
+                                AddrMode loadFromArg0 = new AddrMode(encoder.TargetRegister.Arg0, null, -NonGCStaticsNode.GetClassConstructorContextSize(factory.Target), 0, AddrModeSize.Int64);
+                                encoder.EmitLEA(encoder.TargetRegister.Arg0, ref loadFromArg0);
+                            }
+                            else
+                            {
+                                encoder.EmitLEAQ(encoder.TargetRegister.Arg0, nonGCStaticsSymbol, -NonGCStaticsNode.GetClassConstructorContextSize(factory.Target));
+                            }
                             encoder.EmitJMP(factory.HelperEntrypoint(HelperEntrypoint.EnsureClassConstructorRunAndReturnGCStaticBase));
                         }
                     }

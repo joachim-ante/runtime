@@ -33,7 +33,17 @@ namespace ILCompiler.DependencyAnalysis.X86
         {
             if (symbol.RepresentsIndirectionCell)
             {
-                throw new NotImplementedException();
+                // For indirection cells, we need to:
+                // 1. Load the address from the indirection cell
+                // 2. Store that value to the addrMode location
+                // This requires using a temporary register (EAX)
+
+                // mov eax, [symbol] - load address from indirection cell
+                Builder.EmitByte(0xA1);
+                Builder.EmitReloc(symbol, RelocType.IMAGE_REL_BASED_HIGHLOW);
+
+                // mov [addrMode], eax - store the loaded address
+                EmitIndirInstruction(0x89, (byte)Register.EAX, ref addrMode);
             }
             else
             {
@@ -83,7 +93,17 @@ namespace ILCompiler.DependencyAnalysis.X86
         {
             if (symbol.RepresentsIndirectionCell)
             {
-                throw new NotImplementedException();
+                // For indirection cells, we need to conditionally jump to the address
+                // stored in the indirection cell
+
+                // jne skip (skip the indirect jump if condition is not met)
+                Builder.EmitByte(0x75);
+                Builder.EmitByte(0x06); // Skip next 6 bytes (FF 25 + 4-byte address)
+
+                // jmp [symbol] - indirect jump through the indirection cell
+                Builder.EmitByte(0xFF);
+                Builder.EmitByte(0x25);
+                Builder.EmitReloc(symbol, RelocType.IMAGE_REL_BASED_HIGHLOW);
             }
             else
             {
