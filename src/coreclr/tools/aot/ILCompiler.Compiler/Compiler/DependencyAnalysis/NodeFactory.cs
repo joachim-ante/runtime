@@ -353,7 +353,7 @@ namespace ILCompiler.DependencyAnalysis
             });
             _externIndirectSymbols = new NodeCache<string, ExternSymbolNode>((string name) =>
             {
-                return new ExternSymbolNode(name);
+                return new ExternSymbolNode(name, isIndirection: true);
             });
 
             _pInvokeModuleFixups = new NodeCache<PInvokeModuleData, PInvokeModuleFixupNode>((PInvokeModuleData moduleData) =>

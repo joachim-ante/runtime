@@ -23,17 +23,16 @@ namespace ILCompiler.DependencyAnalysis
                         MetadataType target = (MetadataType)Target;
 
                         bool hasLazyStaticConstructor = factory.PreinitializationManager.HasLazyStaticConstructor(target);
-                        ISortableSymbolNode nonGCStaticsSymbol = factory.TypeNonGCStaticsSymbol(target);
 
                         if (!hasLazyStaticConstructor)
                         {
-                            encoder.EmitMOV(encoder.TargetRegister.Result, nonGCStaticsSymbol);
+                            encoder.EmitMOV(encoder.TargetRegister.Result, factory.TypeNonGCStaticsSymbol(target));
                             encoder.EmitRET();
                         }
                         else
                         {
                             // The fast path check is not necessary. It is always expanded by RyuJIT.
-                            encoder.EmitMOV(encoder.TargetRegister.Arg1, nonGCStaticsSymbol);
+                            encoder.EmitMOV(encoder.TargetRegister.Arg1, factory.TypeNonGCStaticsSymbol(target));
                             encoder.EmitSUB(encoder.TargetRegister.Arg0, encoder.TargetRegister.Arg1, NonGCStaticsNode.GetClassConstructorContextSize(factory.Target));
                             encoder.EmitJMP(factory.HelperEntrypoint(HelperEntrypoint.EnsureClassConstructorRunAndReturnNonGCStaticBase));
                         }
@@ -83,9 +82,8 @@ namespace ILCompiler.DependencyAnalysis
                 case ReadyToRunHelperId.GetGCStaticBase:
                     {
                         MetadataType target = (MetadataType)Target;
-                        ISortableSymbolNode gcStaticsSymbol = factory.TypeGCStaticsSymbol(target);
 
-                        encoder.EmitMOV(encoder.TargetRegister.Result, gcStaticsSymbol);
+                        encoder.EmitMOV(encoder.TargetRegister.Result, factory.TypeGCStaticsSymbol(target));
 
                         if (!factory.PreinitializationManager.HasLazyStaticConstructor(target))
                         {

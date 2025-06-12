@@ -2225,8 +2225,6 @@ namespace Internal.JitInterface
                     }
                     else
                     {
-                        // Type has lazy static constructor
-                        fieldAccessor = CORINFO_FIELD_ACCESSOR.CORINFO_FIELD_STATIC_SHARED_STATIC_HELPER;
                         if (field.HasGCStaticBase)
                         {
                             pResult->helper = CorInfoHelpFunc.CORINFO_HELP_READYTORUN_GCSTATIC_BASE;
@@ -2485,27 +2483,16 @@ namespace Internal.JitInterface
         private bool getStaticBaseAddress(CORINFO_CLASS_STRUCT_* cls, bool isGc, ref CORINFO_CONST_LOOKUP addr)
         {
             MetadataType type = (MetadataType)HandleToObject(cls);
-
-            ISymbolNode staticSymbol;
             if (isGc)
             {
-                staticSymbol = _compilation.NodeFactory.TypeGCStaticsSymbol(type);
                 addr.accessType = InfoAccessType.IAT_PVALUE;
+                addr.addr = (void*)ObjectToHandle(_compilation.NodeFactory.TypeGCStaticsSymbol(type));
             }
             else
             {
-                staticSymbol = _compilation.NodeFactory.TypeNonGCStaticsSymbol(type);
                 addr.accessType = InfoAccessType.IAT_VALUE;
+                addr.addr = (void*)ObjectToHandle(_compilation.NodeFactory.TypeNonGCStaticsSymbol(type));
             }
-
-            // Check if this is an external symbol
-            // For external symbols, return false to force helper usage
-            if (staticSymbol.RepresentsIndirectionCell)
-            {
-                return false;
-            }
-
-            addr.addr = (void*)ObjectToHandle(staticSymbol);
             return true;
         }
 
