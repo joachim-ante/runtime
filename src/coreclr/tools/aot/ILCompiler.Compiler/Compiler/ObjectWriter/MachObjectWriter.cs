@@ -126,6 +126,7 @@ namespace ILCompiler.ObjectWriter
         {
             ulong virtualAddress = 0;
             byte sectionIndex = 1;
+            uint segmentFileStartOffset = fileOffset;
 
             segmentFileSize = 0;
             segmentSize = 0;
@@ -140,7 +141,6 @@ namespace ILCompiler.ObjectWriter
                 {
                     section.FileOffset = fileOffset;
                     fileOffset += (uint)section.Size;
-                    segmentFileSize = Math.Max(segmentFileSize, fileOffset);
                 }
                 else
                 {
@@ -153,9 +153,11 @@ namespace ILCompiler.ObjectWriter
 
                 section.SectionIndex = sectionIndex;
                 sectionIndex++;
-
-                segmentSize = Math.Max(segmentSize, virtualAddress);
             }
+
+            segmentSize = virtualAddress;
+            // File size is the delta from start, but cannot exceed VM size (Mach-O requirement)
+            segmentFileSize = Math.Min(fileOffset - segmentFileStartOffset, (uint)segmentSize);
 
             // ...and the relocation tables
             foreach (MachSection section in _sections)
