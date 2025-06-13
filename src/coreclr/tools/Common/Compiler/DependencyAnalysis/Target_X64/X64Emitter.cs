@@ -43,7 +43,9 @@ namespace ILCompiler.DependencyAnalysis.X64
         {
             if (node.RepresentsIndirectionCell)
             {
-                Builder.EmitByte(0x67);
+                // The 0x67 prefix makes it so that the pointer we move here is truncated to 32bits,
+                // which is most definitely not something we want, ever.
+                //Builder.EmitByte(0x67);
                 Builder.EmitByte(0x48);
                 Builder.EmitByte(0x8B);
                 Builder.EmitByte((byte)(0x00 | ((byte)regDst << 3) | 0x05));

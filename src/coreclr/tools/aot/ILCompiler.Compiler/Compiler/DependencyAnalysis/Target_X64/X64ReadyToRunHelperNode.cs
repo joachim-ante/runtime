@@ -25,7 +25,9 @@ namespace ILCompiler.DependencyAnalysis
 
                         if (!hasLazyStaticConstructor)
                         {
-                            encoder.EmitLEAQ(encoder.TargetRegister.Result, factory.TypeNonGCStaticsSymbol(target));
+                            // Note that we use a MOV here. The MOV will be emitted as a LEA if the target is not an indirection cell,
+                            // otherwise it will be a proper RIP-relative move.
+                            encoder.EmitMOV(encoder.TargetRegister.Result, factory.TypeNonGCStaticsSymbol(target));
                             encoder.EmitRET();
                         }
                         else
