@@ -36,19 +36,8 @@ namespace ILCompiler
                 if (_context.Target.IsWindows)
                 {
                     streamWriter.WriteLine("EXPORTS");
-                    // @TODO: This is a hack. Cf. WindowsNodeMangler
-                    // We need to explicitly export these as DATA so that the linker knows not to produce import thunks for them.
-                    // Once external vtables are fixed, the vtable part is needs to be uncommented.
-                    static bool IsVTable(string symbol) => symbol.StartsWith("??_7") && symbol.EndsWith("@@6B@");
-                    static bool IsNonGCStatics(string symbol) => symbol.StartsWith("?__NONGCSTATICS") && symbol.EndsWith("@@");
-                    static bool IsData(string symbol) => IsNonGCStatics(symbol) || IsVTable(symbol);
                     foreach (string symbol in _exportSymbols)
-                    {
-                        if (IsData(symbol))
-                            streamWriter.WriteLine($"   {symbol.Replace(',', ' ')} DATA");
-                        else
-                            streamWriter.WriteLine($"   {symbol.Replace(',', ' ')}");
-                    }
+                        streamWriter.WriteLine($"   {symbol.Replace(',', ' ')}");
                     foreach (var method in _methods)
                         streamWriter.WriteLine($"   {method.GetUnmanagedCallersOnlyExportName()}");
                 }
