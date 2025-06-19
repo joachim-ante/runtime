@@ -5,6 +5,7 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Linq;
 using System.Text;
 
 using ILCompiler.DependencyAnalysisFramework;
@@ -69,6 +70,10 @@ namespace ILCompiler.DependencyAnalysis
         }
 
         public bool MarkingComplete => _markingComplete;
+
+        private readonly HashSet<string> _globalSymbols = new HashSet<string>();
+
+
 
         public TargetDetails Target
         {
@@ -150,6 +155,92 @@ namespace ILCompiler.DependencyAnalysis
                 return true;
 
             return false;
+        }
+
+        /// <summary>
+        /// Determines if a symbol should be marked as global/exported based on method visibility.
+        /// </summary>
+        /// <param name="symbolNode">The symbol node to check</param>
+        /// <param name="mangledName">The mangled symbol name</param>
+        /// <returns>True if the symbol should be global/exported</returns>
+        public bool ShouldBeGlobal(ISymbolDefinitionNode symbolNode, string mangledName)
+        {
+            // Any methods are accessible since generics can call both public and private methods
+            if (symbolNode is IMethodNode)
+                return true;
+
+            // Non-GC statics are just static fields that someone might refer to, and we want them accessible.
+            if (symbolNode is NonGCStaticsNode)
+                return true;
+
+            // Always export vfts; type-metadata needs to be accessible.
+            if (symbolNode is EETypeNode)
+                return true;
+
+            // For all other symbols, default to not exported for now
+            return false;
+        }
+
+        /// <summary>
+        /// Determines if a symbol should be global and tracks it if so.
+        /// </summary>
+        /// <param name="symbolNode">The symbol node to check</param>
+        /// <param name="mangledName">The mangled symbol name</param>
+        /// <param name="isHidden">Whether the symbol is explicitly marked as hidden</param>
+        /// <returns>True if the symbol should be global/exported</returns>
+        public bool ShouldBeGlobalAndTrack(ISymbolDefinitionNode symbolNode, string mangledName, bool isHidden = false)
+        {
+            if (isHidden)
+                return false;
+
+            bool shouldBeGlobal = ShouldBeGlobal(symbolNode, mangledName);
+            if (shouldBeGlobal)
+            {
+                lock (_globalSymbols)
+                {
+                    _globalSymbols.Add(mangledName);
+                }
+            }
+            return shouldBeGlobal;
+        }
+
+        /// <summary>
+        /// Gets all symbols for export file generation, combining tracked globals with dynamic symbols and cleaning platform prefixes.
+        /// </summary>
+        /// <param name="dynamicSymbols">Additional dynamic symbols to export</param>
+        /// <param name="target">Target platform details for symbol cleaning</param>
+        /// <returns>Combined array of symbols ready for ExportsFileWriter</returns>
+        public string[] GetExportSymbols(string[] dynamicSymbols, TargetDetails target)
+        {
+            // Strip platform prefixes from tracked symbols
+            var cleanedTrackedSymbols = CleanTrackedSymbols(_globalSymbols, target).ToArray();
+
+            // Combine dynamic and tracked symbols
+            string[] combinedSymbols = new string[dynamicSymbols.Length + cleanedTrackedSymbols.Length];
+            dynamicSymbols.CopyTo(combinedSymbols, 0);
+            cleanedTrackedSymbols.CopyTo(combinedSymbols, dynamicSymbols.Length);
+
+            return combinedSymbols;
+        }
+
+        /// <summary>
+        /// Strips platform-specific prefixes from tracked symbols.
+        /// </summary>
+        private static IEnumerable<string> CleanTrackedSymbols(IReadOnlyCollection<string> trackedSymbols, TargetDetails target)
+        {
+            foreach (string symbol in trackedSymbols)
+            {
+                if (string.IsNullOrEmpty(symbol))
+                    continue;
+                if (target.IsApplePlatform && symbol.StartsWith('_'))
+                {
+                    yield return symbol.Substring(1); // Remove leading underscore
+                }
+                else
+                {
+                    yield return symbol; // Keep as-is for other platforms
+                }
+            }
         }
 
         protected struct NodeCache<TKey, TValue>

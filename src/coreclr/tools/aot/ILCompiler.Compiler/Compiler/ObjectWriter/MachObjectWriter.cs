@@ -126,6 +126,7 @@ namespace ILCompiler.ObjectWriter
         {
             ulong virtualAddress = 0;
             byte sectionIndex = 1;
+            uint segmentFileStartOffset = fileOffset;
 
             segmentFileSize = 0;
             segmentSize = 0;
@@ -140,7 +141,6 @@ namespace ILCompiler.ObjectWriter
                 {
                     section.FileOffset = fileOffset;
                     fileOffset += (uint)section.Size;
-                    segmentFileSize = Math.Max(segmentFileSize, fileOffset);
                 }
                 else
                 {
@@ -153,9 +153,11 @@ namespace ILCompiler.ObjectWriter
 
                 section.SectionIndex = sectionIndex;
                 sectionIndex++;
-
-                segmentSize = Math.Max(segmentSize, virtualAddress);
             }
+
+            segmentSize = virtualAddress;
+            // File size is the delta from start, but cannot exceed VM size (Mach-O requirement)
+            segmentFileSize = Math.Min(fileOffset - segmentFileStartOffset, (uint)segmentSize);
 
             // ...and the relocation tables
             foreach (MachSection section in _sections)
@@ -623,7 +625,8 @@ namespace ILCompiler.ObjectWriter
                             IsPCRelative = true,
                         });
                 }
-                else if (symbolicRelocation.Type is IMAGE_REL_BASED_ARM64_PAGEBASE_REL21 or IMAGE_REL_BASED_ARM64_PAGEOFFSET_12A)
+                else if (symbolicRelocation.Type is IMAGE_REL_BASED_ARM64_PAGEBASE_REL21 or IMAGE_REL_BASED_ARM64_PAGEOFFSET_12A
+                    or IMAGE_REL_BASED_ARM64_PAGEOFFSET_12L)
                 {
                     if (symbolicRelocation.Addend != 0)
                     {
@@ -639,10 +642,16 @@ namespace ILCompiler.ObjectWriter
                             });
                     }
 
+                    // Check if this is an external symbol that needs GOT indirection
+                    // External symbols have type N_UNDF | N_EXT
+                    MachSymbol symbol = _symbolTable.FirstOrDefault(s => s.Name == symbolicRelocation.SymbolName);
+                    bool isGOTReloc = symbol != null && symbol.Type == (N_UNDF | N_EXT);
+
                     byte type = symbolicRelocation.Type switch
                     {
-                        IMAGE_REL_BASED_ARM64_PAGEBASE_REL21 => ARM64_RELOC_PAGE21,
+                        IMAGE_REL_BASED_ARM64_PAGEBASE_REL21 => isGOTReloc ? ARM64_RELOC_GOT_LOAD_PAGE21 : ARM64_RELOC_PAGE21,
                         IMAGE_REL_BASED_ARM64_PAGEOFFSET_12A => ARM64_RELOC_PAGEOFF12,
+                        IMAGE_REL_BASED_ARM64_PAGEOFFSET_12L => isGOTReloc ? ARM64_RELOC_GOT_LOAD_PAGEOFF12 : ARM64_RELOC_PAGEOFF12,
                         _ => 0
                     };
 
@@ -654,7 +663,7 @@ namespace ILCompiler.ObjectWriter
                             Length = 4,
                             RelocationType = type,
                             IsExternal = true,
-                            IsPCRelative = symbolicRelocation.Type != IMAGE_REL_BASED_ARM64_PAGEOFFSET_12A,
+                            IsPCRelative = symbolicRelocation.Type == IMAGE_REL_BASED_ARM64_PAGEBASE_REL21,
                         });
                 }
                 else if (symbolicRelocation.Type == IMAGE_REL_BASED_DIR64)

@@ -76,7 +76,9 @@ namespace ILCompiler
 
         public sealed override bool ShouldReferenceThroughImportTable(TypeDesc type)
         {
-            return false;
+            // For ARM64 dylib compatibility: always use import table for cross-assembly references
+            // This ensures GOT-based addressing instead of direct ADRP/ADD sequences
+            return !ContainsType(type);
         }
     }
 
